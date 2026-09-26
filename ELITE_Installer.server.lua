@@ -44,20 +44,40 @@ part("Floor",Vector3.new(240,4,180),Vector3.new(0,-2,0),Color3.fromRGB(32,34,40)
 for x=-100,100,20 do part("FloorLineX",Vector3.new(0.25,.12,180),Vector3.new(x,.08,0),Color3.fromRGB(58,60,70),Enum.Material.SmoothPlastic) end
 for z=-70,70,20 do part("FloorLineZ",Vector3.new(240,.12,.25),Vector3.new(0,.08,z),Color3.fromRGB(58,60,70),Enum.Material.SmoothPlastic) end
 
-part("NorthWall",Vector3.new(240,24,4),Vector3.new(0,10,-90),nil,Enum.Material.Brick)
-part("SouthWall",Vector3.new(240,24,4),Vector3.new(0,10,90),nil,Enum.Material.Brick)
-part("WestWall",Vector3.new(4,24,180),Vector3.new(-120,10,0),nil,Enum.Material.Brick)
-part("EastWall",Vector3.new(4,24,180),Vector3.new(120,10,0),nil,Enum.Material.Brick)
+part("NorthWall",Vector3.new(240,24,4),Vector3.new(0,10,-90),Color3.fromRGB(25,27,34),Enum.Material.Brick)
+part("SouthWall",Vector3.new(240,24,4),Vector3.new(0,10,90),Color3.fromRGB(25,27,34),Enum.Material.Brick)
+part("WestWall",Vector3.new(4,24,180),Vector3.new(-120,10,0),Color3.fromRGB(25,27,34),Enum.Material.Brick)
+part("EastWall",Vector3.new(4,24,180),Vector3.new(120,10,0),Color3.fromRGB(25,27,34),Enum.Material.Brick)
 
-for i,x in ipairs({-70,-35,0,35,70}) do
- part("CenterCover"..i,Vector3.new(12,8,28),Vector3.new(x,4,0),Color3.fromRGB(52,55,65),Enum.Material.Metal)
+-- Perimeter rails
+for _,z in ipairs({-86,86}) do part("Rail",Vector3.new(232,1,1),Vector3.new(0,5,z),Color3.fromRGB(90,94,108),Enum.Material.Metal) end
+for _,x in ipairs({-116,116}) do part("Rail",Vector3.new(1,1,172),Vector3.new(x,5,0),Color3.fromRGB(90,94,108),Enum.Material.Metal) end
+
+-- Main center lane
+for i,x in ipairs({-72,-36,36,72}) do
+ part("CenterCover"..i,Vector3.new(14,7,24),Vector3.new(x,3.5,0),Color3.fromRGB(52,55,65),Enum.Material.Metal)
 end
-part("CenterBlock",Vector3.new(26,10,18),Vector3.new(0,5,0),Color3.fromRGB(62,65,78),Enum.Material.Metal)
-part("RedBase",Vector3.new(30,8,32),Vector3.new(-92,4,0),Color3.fromRGB(110,30,38),Enum.Material.Metal)
-part("BlueBase",Vector3.new(30,8,32),Vector3.new(92,4,0),Color3.fromRGB(35,65,120),Enum.Material.Metal)
-for _,v in ipairs({{-65,3,-45},{-65,3,45},{65,3,-45},{65,3,45},{-20,2.5,-35},{20,2.5,35}}) do
- part("Cover",Vector3.new(18,6,14),Vector3.new(v[1],v[2],v[3]),Color3.fromRGB(48,51,60),Enum.Material.Metal)
+part("CenterBlock",Vector3.new(20,8,20),Vector3.new(0,4,0),Color3.fromRGB(68,72,84),Enum.Material.Metal)
+
+-- Team bases and beacons
+part("RedBase",Vector3.new(28,6,34),Vector3.new(-94,3,0),Color3.fromRGB(95,28,36),Enum.Material.Metal)
+part("BlueBase",Vector3.new(28,6,34),Vector3.new(94,3,0),Color3.fromRGB(30,58,105),Enum.Material.Metal)
+part("RedBeacon",Vector3.new(3,12,3),Vector3.new(-94,6,-15),Color3.fromRGB(255,55,65),Enum.Material.Neon)
+part("BlueBeacon",Vector3.new(3,12,3),Vector3.new(94,6,-15),Color3.fromRGB(55,120,255),Enum.Material.Neon)
+
+-- Side cover creates alternate routes
+for _,v in ipairs({{-66,3,-48},{-66,3,48},{66,3,-48},{66,3,48},{-24,2.5,-34},{24,2.5,34},{-28,2.5,34},{28,2.5,-34}}) do
+ part("Cover",Vector3.new(16,6,13),Vector3.new(v[1],v[2],v[3]),Color3.fromRGB(48,51,60),Enum.Material.Metal)
 end
+
+-- Low waist-high barriers
+for _,v in ipairs({{-42,1.5,-20},{42,1.5,20},{-42,1.5,20},{42,1.5,-20}}) do
+ part("LowCover",Vector3.new(12,3,4),Vector3.new(v[1],v[2],v[3]),Color3.fromRGB(42,45,53),Enum.Material.Metal)
+end
+
+-- Spawn pads
+part("RedSpawnPad",Vector3.new(20,.5,24),Vector3.new(-105,.25,0),Color3.fromRGB(75,22,30),Enum.Material.Metal)
+part("BlueSpawnPad",Vector3.new(20,.5,24),Vector3.new(105,.25,0),Color3.fromRGB(24,48,90),Enum.Material.Metal)
 
 local function spawn(n,p,t,c)
  local s=Instance.new("SpawnLocation"); s.Name=n; s.Size=Vector3.new(10,1,10); s.Position=p; s.Anchored=true
