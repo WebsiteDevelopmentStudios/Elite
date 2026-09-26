@@ -136,7 +136,9 @@ local rem=RS:WaitForChild("ELITE_Remotes")
 local fire,reload,hitmarker,ammoState=rem.Fire,rem.Reload,rem.Hitmarker,rem.AmmoState
 local ammo,reserve=30,120; local reloading=false; local aiming=false; local sprint=false; local crouch=false; local last=0; local gun
 local sensitivity=.35
+local started=false
 UIS.MouseBehavior=Enum.MouseBehavior.Default
+UIS.MouseIconEnabled=true
 
 local gui=Instance.new("ScreenGui"); gui.Name="ELITE_UI"; gui.IgnoreGuiInset=true; gui.ResetOnSpawn=false; gui.Parent=p:WaitForChild("PlayerGui")
 local menu=Instance.new("Frame"); menu.Name="MainMenu"; menu.Size=UDim2.fromScale(1,1); menu.BackgroundColor3=Color3.fromRGB(10,11,16); menu.Parent=gui
@@ -158,7 +160,11 @@ local controls=label(panel,"WASD  MOVE     SHIFT  SPRINT     C  CROUCH\nLMB  FIR
 controls.TextColor3=Color3.fromRGB(155,160,175)
 
 local function closeMenu()
- menu.Visible=false; UIS.MouseBehavior=Enum.MouseBehavior.LockCenter; UIS.MouseIconEnabled=false
+ started=true
+ menu.Visible=false
+ UIS.MouseBehavior=Enum.MouseBehavior.LockCenter
+ UIS.MouseIconEnabled=false
+ p.CameraMode=Enum.CameraMode.LockFirstPerson
 end
 play.Activated:Connect(closeMenu)
 
@@ -234,7 +240,9 @@ hitmarker.OnClientEvent:Connect(function(k,hs,d)
  task.delay(.35,function() hm.Text=""; if not reloading then status.Text="" end end)
 end)
 local function char(c)
- local h=c:WaitForChild("Humanoid"); h.WalkSpeed=16; p.CameraMode=Enum.CameraMode.LockFirstPerson; gunMake()
+ local h=c:WaitForChild("Humanoid"); h.WalkSpeed=16
+ if started then p.CameraMode=Enum.CameraMode.LockFirstPerson else p.CameraMode=Enum.CameraMode.Classic end
+ gunMake()
 end
 p.CharacterAdded:Connect(char); if p.Character then char(p.Character) end
 RunService.RenderStepped:Connect(place)
