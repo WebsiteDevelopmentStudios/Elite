@@ -161,6 +161,15 @@ UIS.MouseIconEnabled=true
 p.CameraMode=Enum.CameraMode.Classic
 
 local gui=Instance.new("ScreenGui"); gui.Name="ELITE_UI"; gui.IgnoreGuiInset=true; gui.ResetOnSpawn=false; gui.Parent=p:WaitForChild("PlayerGui")
+
+-- Menu cursor watchdog: continuously overrides Roblox mouse-lock while the menu is visible.
+local function enforceMenuMouse()
+ if menu and menu.Visible and not started then
+  UIS.MouseBehavior=Enum.MouseBehavior.Default
+  UIS.MouseIconEnabled=true
+  p.CameraMode=Enum.CameraMode.Classic
+ end
+end
 local menu=Instance.new("Frame"); menu.Name="MainMenu"; menu.Size=UDim2.fromScale(1,1); menu.BackgroundColor3=Color3.fromRGB(10,11,16); menu.Parent=gui
 local shade=Instance.new("Frame"); shade.Size=UDim2.fromScale(1,1); shade.BackgroundTransparency=.18; shade.BackgroundColor3=Color3.fromRGB(0,0,0); shade.Parent=menu
 local function label(parent,text,pos,size,font)
@@ -179,9 +188,12 @@ local pc=Instance.new("UICorner"); pc.CornerRadius=UDim.new(0,10); pc.Parent=pla
 local controls=label(panel,"WASD  MOVE     SHIFT  SPRINT     C  CROUCH\nLMB  FIRE     RMB  AIM     R  RELOAD",UDim2.fromScale(.08,.60),UDim2.fromScale(.84,.27),Enum.Font.GothamMedium)
 controls.TextColor3=Color3.fromRGB(155,160,175)
 
+RunService.RenderStepped:Connect(enforceMenuMouse)
+
 local function closeMenu()
  started=true
  menu.Visible=false
+ started=true
  UIS.MouseBehavior=Enum.MouseBehavior.LockCenter
  UIS.MouseIconEnabled=false
  p.CameraMode=Enum.CameraMode.LockFirstPerson
