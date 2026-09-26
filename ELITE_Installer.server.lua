@@ -9,6 +9,7 @@ local Workspace=game:GetService("Workspace")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local Teams=game:GetService("Teams")
 local Lighting=game:GetService("Lighting")
+local StarterGui=game:GetService("StarterGui")
 
 local function wipe(name,parent)
  local x=parent:FindFirstChild(name); if x then x:Destroy() end
@@ -16,6 +17,8 @@ end
 wipe("ELITE_Arena",Workspace); wipe("ELITE_Remotes",ReplicatedStorage)
 wipe("ELITE_Server",ServerScriptService); wipe("ELITE_Client",StarterPlayer.StarterPlayerScripts)
 
+Workspace.StreamingEnabled=false
+StarterPlayer.EnableMouseLockOption=false
 Lighting.ClockTime=14
 Lighting.Brightness=2
 Lighting.GlobalShadows=true
@@ -38,11 +41,7 @@ local function part(n,s,p,m,mat)
 end
 
 -- Flat, thick floor: the old thin floor could appear to disappear/fail to load.
-part("Floor",Vector3.new(240,4,180),Vector3.new(0,-2,0),Color3.fromRGB(32,34,40),Enum.Material.Concrete)
-
--- Floor grid strips make the playable surface obvious.
-for x=-100,100,20 do part("FloorLineX",Vector3.new(0.25,.12,180),Vector3.new(x,.08,0),Color3.fromRGB(58,60,70),Enum.Material.SmoothPlastic) end
-for z=-70,70,20 do part("FloorLineZ",Vector3.new(240,.12,.25),Vector3.new(0,.08,z),Color3.fromRGB(58,60,70),Enum.Material.SmoothPlastic) end
+part("Floor",Vector3.new(240,2,180),Vector3.new(0,-1,0),Color3.fromRGB(32,34,40),Enum.Material.Concrete)
 
 part("NorthWall",Vector3.new(240,24,4),Vector3.new(0,10,-90),Color3.fromRGB(25,27,34),Enum.Material.Brick)
 part("SouthWall",Vector3.new(240,24,4),Vector3.new(0,10,90),Color3.fromRGB(25,27,34),Enum.Material.Brick)
@@ -159,6 +158,7 @@ local sensitivity=.35
 local started=false
 UIS.MouseBehavior=Enum.MouseBehavior.Default
 UIS.MouseIconEnabled=true
+p.CameraMode=Enum.CameraMode.Classic
 
 local gui=Instance.new("ScreenGui"); gui.Name="ELITE_UI"; gui.IgnoreGuiInset=true; gui.ResetOnSpawn=false; gui.Parent=p:WaitForChild("PlayerGui")
 local menu=Instance.new("Frame"); menu.Name="MainMenu"; menu.Size=UDim2.fromScale(1,1); menu.BackgroundColor3=Color3.fromRGB(10,11,16); menu.Parent=gui
@@ -265,7 +265,13 @@ local function char(c)
  gunMake()
 end
 p.CharacterAdded:Connect(char); if p.Character then char(p.Character) end
-RunService.RenderStepped:Connect(place)
+RunService.RenderStepped:Connect(function()
+ if menu.Visible then
+  UIS.MouseBehavior=Enum.MouseBehavior.Default
+  UIS.MouseIconEnabled=true
+ end
+ place()
+end)
 
 -- Keep the camera in first person while applying a deliberately lower mouse sensitivity.
 UIS.InputChanged:Connect(function(i,gp)
