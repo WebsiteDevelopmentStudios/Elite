@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="utf-8"?>
+<roblox version="4" xmlversion="4">
+<Item class="DataModel" referent="RBX0">
+<Properties>
+<string name="Name">ELITE</string>
+</Properties>
+<Item class="ServerScriptService" referent="RBX1">
+<Properties><string name="Name">ServerScriptService</string></Properties>
+<Item class="Script" referent="RBX2">
+<Properties>
+<string name="Name">ELITE_Server</string>
+<ProtectedString name="Source"><![CDATA[-- ELITE | Server Combat
+-- Original arcade FPS framework. Server validates shots and damage.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Teams = game:GetService("Teams")
+local Debris = game:GetService("Debris")
+
+local remotes = ReplicatedStorage:FindFirstChild("ELITE_Remotes") or Instance.new("Folder")
+remotes.Name = "ELITE_Remotes"
+remotes.Parent = ReplicatedStorage
+
+local fire = remotes:FindFirstChild("Fire") or Instance.new("RemoteEvent")
+fire.Name = "Fire"
+fire.Parent = remotes
+
+local reload = remotes:FindFirstChild("Reload") or Instance.new("RemoteEvent")
+reload.Name = "Reload"
+reload.Parent = remotes
+
+local hitmarker = remotes:FindFirstChild("Hitmarker") or Instance.new("RemoteEvent")
+hitmarker.Name = "Hitmarker"
+hitmarker.Parent = remotes
+
+local CONFIG = {
+	Damage = 24,
+	HeadshotMultiplier = 1.6,
+	Range = 700,
+	FireRate = 0.105,
+	Magazine = 30,
+	Reserve = 120,
+	ReloadTime = 1.65,
+	WalkSpeed = 16,
+	SprintSpeed = 24,
+}
+
+local state = {}
+
+local function makeTeam(name, brickColor)
+	local team = Teams:FindFirstChild(name) or Instance.new("Team")
+	team.Name = name
+	team.TeamColor = brickColor
+	team.AutoAssignable = false
+	team.Parent = Teams
+	return team
+end
+
+local red = makeTeam("ELITE RED", BrickColor.new("Really red"))
+local blue = makeTeam("ELITE BLUE", BrickColor.new("Really blue"))
+
+local function makePart(parent, name, size, cframe, material)
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cframe
+	p.Anchored = true
+	p.Material = material or Enum.Material.Concrete
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = parent
+	return p
+end
+
+local map = workspace:FindFirstChild("ELITE_Arena") or Instance.new("Folder")
+map.Name = "ELITE_Arena"
+map.Parent = workspace
+
+if not map:FindFirstChild("Floor") then
+	makePart(map,"Floor",Vector3.new(240,2,180),CFrame.new(0,-1,0),Enum.Material.Concrete)
+	makePart(map,"NorthWall",Vector3.new(240,24,4),CFrame.new(0,11,-90),Enum.Material.Brick)
+	makePart(map,"SouthWall",Vector3.new(240,24,4),CFrame.new(0,11,90),Enum.Material.Brick)
+	makePart(map,"WestWall",Vector3.new(4,24,180),CFrame.new(-120,11,0),Enum.Material.Brick)
+	makePart(map,"EastWall",Vector3.new(4,24,180),CFrame.new(120,11,0),Enum.Material.Brick)
+
+	-- Central lanes / cover
+	for i,x in ipairs({-70,-35,0,35,70}) do
+		makePart(map,"Cover_"..i,Vector3.new(12,8,28),CFrame.new(x,4,0),Enum.Material.Metal)
+	end
+	makePart(map,"CenterBlock",Vector3.new(26,10,18),CFrame.new(0,5,0),Enum.Material.Metal)
+	makePart(map,"RedBase",Vector3.new(30,8,32),CFrame.new(-92,4,0),Enum.Material.Metal)
+	makePart(map,"BlueBase",Vector3.new(30,8,32),CFrame.new(92,4,0),Enum.Material.Metal)
+
+	local redSpawn=Instance.new("SpawnLocation")
+	redSpawn.Name="RedSpawn"
+	redSpawn.Size=Vector3.new(8,1,8)
+	redSpawn.CFrame=CFrame.new(-100,1,0)
+	redSpawn.Neutral=false
+	redSpawn.TeamColor=red.TeamColor
+	redSpawn.Parent=map
+
+	local blueSpawn=Instance.new("SpawnLocation")
+	blueSpawn.Name="BlueSpawn"
+	blueSpawn.Size=Vector3.new(8,1,8)
+	blueSpawn.CFrame=CFrame.new(100,1,0)
+	blueSpawn.Neutral=false
+	blueSpawn.TeamColor=blue.TeamColor
+	blueSpawn.Parent=map
+end
+
+local function assignTeam(player)
+	local r,b=0,0
+	for _,p in ipairs(Players:GetPlayers()) do
+		if p.Team==red then r+=1 elseif p.Team==blue then b+=1 end
+	end
+	player.Team = (r<=b) and red or blue
+end
+
+local function setupLeaderstats(player)
+	local ls=Instance.new("Folder")
+	ls.Name="leaderstats"
+	ls.Parent=player
+	local kills=Instance.new("IntValue")
+	kills.Name="KILLS"
+	kills.Parent=ls
+	local deaths=Instance.new("IntValue")
+	deaths.Name="DEATHS"
+	deaths.Parent=ls
+	local score=Instance.new("IntValue")
+	score.Name="SCORE"
+	score.Parent=ls
+end
+
+Players.PlayerAdded:Connect(function(player)
+	assignTeam(player)
+	setupLeaderstats(player)
+	state[player]={ammo=CONFIG.Magazine,reserve=CONFIG.Reserve,lastShot=0,reloading=false}
+	player.CharacterAdded:Connect(function(character)
+		local hum=character:WaitForChild("Humanoid")
+		hum.WalkSpeed=CONFIG.WalkSpeed
+		hum.Died:Connect(function()
+			local ls=player:FindFirstChild("leaderstats")
+			if ls then ls.DEATHS.Value+=1 end
+		end)
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(player) state[player]=nil end)
+
+reload.OnServerEvent:Connect(function(player)
+	local s=state[player]
+	if not s or s.reloading or s.ammo>=CONFIG.Magazine or s.reserve<=0 then return end
+	s.reloading=true
+	task.delay(CONFIG.ReloadTime,function()
+		if not state[player] then return end
+		local needed=CONFIG.Magazine-s.ammo
+		local take=math.min(needed,s.reserve)
+		s.ammo+=take
+		s.reserve-=take
+		s.reloading=false
+	end)
+end)
+
+local function tracer(origin, hit)
+	local p=Instance.new("Part")
+	p.Name="PaintTracer"
+	p.Anchored=true
+	p.CanCollide=false
+	p.CanQuery=false
+	p.CanTouch=false
+	p.Material=Enum.Material.Neon
+	p.Size=Vector3.new(.12,.12,(hit-origin).Magnitude)
+	p.CFrame=CFrame.lookAt((origin+hit)/2,hit)
+	p.Parent=workspace
+	Debris:AddItem(p,.06)
+end
+
+fire.OnServerEvent:Connect(function(player, origin, direction)
+	local s=state[player]
+	if not s or s.reloading then return end
+	if typeof(origin)~="Vector3" or typeof(direction)~="Vector3" then return end
+	local now=os.clock()
+	if now-s.lastShot<CONFIG.FireRate*.8 then return end
+	if s.ammo<=0 then return end
+	s.lastShot=now
+	s.ammo-=1
+
+	local character=player.Character
+	local head=character and character:FindFirstChild("Head")
+	if not head then return end
+	-- Keep the shot reasonably close to the player's camera to reduce spoofing.
+	if (origin-head.Position).Magnitude>8 then origin=head.Position end
+
+	local params=RaycastParams.new()
+	params.FilterType=Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances={character}
+	local result=workspace:Raycast(origin,direction.Unit*CONFIG.Range,params)
+	local hitPos=origin+direction.Unit*CONFIG.Range
+	if result then hitPos=result.Position end
+	tracer(origin,hitPos)
+
+	if result then
+		local model=result.Instance:FindFirstAncestorOfClass("Model")
+		local hum=model and model:FindFirstChildOfClass("Humanoid")
+		local target=model and Players:GetPlayerFromCharacter(model)
+		if hum and target and target~=player and target.Team~=player.Team and hum.Health>0 then
+			local damage=CONFIG.Damage
+			local headshot=result.Instance.Name=="Head"
+			if headshot then damage*=CONFIG.HeadshotMultiplier end
+			local before=hum.Health
+			hum:TakeDamage(damage)
+			local credited=(before>0 and hum.Health<=0)
+			hitmarker:FireClient(player,credited,headshot,math.floor(damage))
+			if credited then
+				local ls=player:FindFirstChild("leaderstats")
+				if ls then
+					ls.KILLS.Value+=1
+					ls.SCORE.Value+=100
+				end
+			end
+		end
+	end
+end)]]></ProtectedString>
+</Properties>
+</Item>
+</Item>
+<Item class="StarterPlayer" referent="RBX3">
+<Properties><string name="Name">StarterPlayer</string></Properties>
+<Item class="StarterPlayerScripts" referent="RBX4">
+<Properties><string name="Name">StarterPlayerScripts</string></Properties>
+<Item class="LocalScript" referent="RBX5">
+<Properties>
+<string name="Name">ELITE_Client</string>
+<ProtectedString name="Source"><![CDATA[-- ELITE | Client FPS controller
+local Players=game:GetService("Players")
+local ReplicatedStorage=game:GetService("ReplicatedStorage")
+local UIS=game:GetService("UserInputService")
+local RunService=game:GetService("RunService")
+local player=Players.LocalPlayer
+local camera=workspace.CurrentCamera
+local remotes=ReplicatedStorage:WaitForChild("ELITE_Remotes")
+local fire=remotes:WaitForChild("Fire")
+local reload=remotes:WaitForChild("Reload")
+local hitmarker=remotes:WaitForChild("Hitmarker")
+
+local MAG=30
+local ammo=MAG
+local reserve=120
+local fireDelay=.105
+local lastFire=0
+local reloading=false
+local sprinting=false
+local aiming=false
+local gunModel=nil
+
+local gui=Instance.new("ScreenGui")
+gui.Name="ELITE_HUD"
+gui.ResetOnSpawn=false
+gui.IgnoreGuiInset=true
+gui.Parent=player:WaitForChild("PlayerGui")
+
+local function label(name,text,pos,size)
+	local l=Instance.new("TextLabel")
+	l.Name=name
+	l.Text=text
+	l.Position=pos
+	l.Size=size
+	l.BackgroundTransparency=1
+	l.TextColor3=Color3.new(1,1,1)
+	l.Font=Enum.Font.GothamBold
+	l.TextScaled=true
+	l.Parent=gui
+	return l
+end
+
+local title=label("Title","ELITE",UDim2.fromOffset(25,18),UDim2.fromOffset(160,45))
+title.TextXAlignment=Enum.TextXAlignment.Left
+local ammoLabel=label("Ammo","30 / 120",UDim2.new(1,-240,1,-95),UDim2.fromOffset(210,65))
+ammoLabel.TextXAlignment=Enum.TextXAlignment.Right
+local status=label("Status","",UDim2.fromScale(.5,.73),UDim2.fromOffset(300,45))
+status.AnchorPoint=Vector2.new(.5,.5)
+local cross=label("Crosshair","+ ",UDim2.fromScale(.5,.5),UDim2.fromOffset(35,35))
+cross.AnchorPoint=Vector2.new(.5,.5)
+
+local hit=label("Hitmarker","",UDim2.fromScale(.5,.5),UDim2.fromOffset(70,70))
+hit.AnchorPoint=Vector2.new(.5,.5)
+hit.TextSize=34
+
+local function updateAmmo() ammoLabel.Text=string.format("%02d / %03d",ammo,reserve) end
+updateAmmo()
+
+local function makeGun()
+	if gunModel then gunModel:Destroy() end
+	gunModel=Instance.new("Model")
+	gunModel.Name="ELITE_Rifle"
+	local body=Instance.new("Part")
+	body.Name="Body"; body.Size=Vector3.new(.35,.5,2); body.Color=Color3.fromRGB(35,35,40)
+	body.Material=Enum.Material.Metal; body.CanCollide=false; body.Anchored=true; body.Parent=gunModel
+	local barrel=Instance.new("Part")
+	barrel.Name="Barrel"; barrel.Size=Vector3.new(.16,.16,1.2); barrel.Color=Color3.fromRGB(10,10,12)
+	barrel.Material=Enum.Material.Metal; barrel.CanCollide=false; barrel.Anchored=true; barrel.Parent=gunModel
+	local sight=Instance.new("Part")
+	sight.Name="Sight"; sight.Size=Vector3.new(.12,.18,.45); sight.Color=Color3.fromRGB(80,80,85)
+	sight.CanCollide=false; sight.Anchored=true; sight.Parent=gunModel
+	gunModel.Parent=camera
+end
+
+local function placeGun(dt)
+	if not gunModel then return end
+	local bob=Vector3.new(0,0,0)
+	if sprinting then bob=Vector3.new(math.sin(os.clock()*8)*.04,-.08,0) end
+	local base=CFrame.new(.65,-.55,-1.35)*CFrame.Angles(0,math.rad(180),0)
+	if aiming then base=CFrame.new(0,-.42,-1.05)*CFrame.Angles(0,math.rad(180),0) end
+	local cf=camera.CFrame*base*CFrame.new(bob)
+	local body=gunModel:FindFirstChild("Body")
+	local barrel=gunModel:FindFirstChild("Barrel")
+	local sight=gunModel:FindFirstChild("Sight")
+	if body then body.CFrame=cf end
+	if barrel then barrel.CFrame=cf*CFrame.new(0,0,-1.55) end
+	if sight then sight.CFrame=cf*CFrame.new(0,.31,-.35) end
+end
+
+local function doReload()
+	if reloading or ammo>=MAG or reserve<=0 then return end
+	reloading=true
+	status.Text="RELOADING"
+	reload:FireServer()
+	task.delay(1.7,function()
+		local needed=MAG-ammo
+		local take=math.min(needed,reserve)
+		ammo+=take; reserve-=take
+		reloading=false
+		status.Text=""
+		updateAmmo()
+	end)
+end
+
+local function shoot()
+	if reloading or os.clock()-lastFire<fireDelay then return end
+	if ammo<=0 then doReload(); return end
+	lastFire=os.clock()
+	ammo-=1; updateAmmo()
+	local origin=camera.CFrame.Position
+	local direction=camera.CFrame.LookVector
+	fire:FireServer(origin,direction)
+end
+
+UIS.InputBegan:Connect(function(input,gp)
+	if gp then return end
+	if input.UserInputType==Enum.UserInputType.MouseButton1 then shoot()
+	elseif input.UserInputType==Enum.UserInputType.MouseButton2 then aiming=true
+	elseif input.KeyCode==Enum.KeyCode.R then doReload()
+	elseif input.KeyCode==Enum.KeyCode.LeftShift then
+		sprinting=true
+		local h=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if h then h.WalkSpeed=24 end
+	elseif input.KeyCode==Enum.KeyCode.C then
+		local h=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if h then h.WalkSpeed=10; h.CameraOffset=Vector3.new(0,-1,0) end
+	end
+end)
+
+UIS.InputEnded:Connect(function(input)
+	if input.UserInputType==Enum.UserInputType.MouseButton2 then aiming=false
+	elseif input.KeyCode==Enum.KeyCode.LeftShift then
+		sprinting=false
+		local h=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if h then h.WalkSpeed=16 end
+	elseif input.KeyCode==Enum.KeyCode.C then
+		local h=player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if h then h.WalkSpeed=16; h.CameraOffset=Vector3.zero end
+	end
+end)
+
+hitmarker.OnClientEvent:Connect(function(kill,headshot,damage)
+	hit.Text=headshot and "✦" or "×"
+	status.Text=kill and ("ELIMINATION  +"..damage) or ("+"..damage)
+	task.delay(.35,function()
+		hit.Text=""
+		if status.Text~="RELOADING" then status.Text="" end
+	end)
+end)
+
+local function setupCharacter(char)
+	local h=char:WaitForChild("Humanoid")
+	h.WalkSpeed=16
+	h.JumpPower=50
+	camera.CameraType=Enum.CameraType.Custom
+	player.CameraMode=Enum.CameraMode.LockFirstPerson
+	makeGun()
+end
+
+player.CharacterAdded:Connect(setupCharacter)
+if player.Character then setupCharacter(player.Character) end
+RunService.RenderStepped:Connect(placeGun)]]></ProtectedString>
+</Properties>
+</Item>
+</Item>
+</Item>
+</Item>
+</roblox>
